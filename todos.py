@@ -3,6 +3,13 @@ import os
 import urwid
 import re
 import subprocess
+import uuid
+
+class Todo:
+    def __init__(self, text, status="open"):
+        self.id = str(uuid.uuid4())
+        self.text = text
+        self.status = status
 
 class TodoApp:
     def __init__(self):
@@ -51,10 +58,8 @@ class TodoApp:
             content = f.read()
             todos = re.findall(r'- \[([ x])\] (.+)', content)
             for status, text in todos:
-                if status == 'x':
-                    self.todos["closed"].append(text)
-                else:
-                    self.todos["open"].append(text)
+                todo = Todo(text, "closed" if status == 'x' else "open")
+                self.todos[todo.status].append(todo)
 
     def save_todos(self):
         with open(self.readme_path, "r") as f:
@@ -67,9 +72,9 @@ class TodoApp:
                 todo_section = True
                 new_content.append(line)
                 for todo in self.todos["open"]:
-                    new_content.append(f"- [ ] {todo}\n")
+                    new_content.append(f"- [ ] {todo.text}\n")
                 for todo in self.todos["closed"]:
-                    new_content.append(f"- [x] {todo}\n")
+                    new_content.append(f"- [x] {todo.text}\n")
             elif todo_section and line.strip().startswith("- ["):
                 continue
             else:
@@ -79,30 +84,50 @@ class TodoApp:
         with open(self.readme_path, "w") as f:
             f.writelines(new_content)
 
-    def create_todo_list(self, todos, is_open=True):
+    def create_todo_list(self, todos):
         body = []
         for todo in todos:
-            checkbox = self.checkbox_open if is_open else self.checkbox_closed
-            text = urwid.Text(f"{checkbox} {todo}")
+            checkbox = self.checkbox_open if todo.status == "open" else self.checkbox_closed
+            text = urwid.Text(f"{checkbox} {todo.text}")
             body.append(urwid.AttrMap(text, None, focus_map='focus'))
         return urwid.ListBox(urwid.SimpleFocusListWalker(body))
 
     def item_chosen(self, todo):
-        if todo in self.todos["open"]:
-            self.todos["open"].remove(todo)
-            self.todos["closed"].append(todo)
-        else:
-            self.todos["closed"].remove(todo)
-            self.todos["open"].append(todo)
+        old_status = todo.status
+        new_status = "closed" if old_status == "open" else "open"
+        self.todos[old_status].remove(todo)
+        todo.status = new_status
+        self.todos[new_status].append(todo)
+        
+        # Handle empty list case
+        if not self.todos[old_status]:
+            self.current_focus = new_status
+            self.columns.focus_position = 0 if new_status == "open" else 1
+        
         self.update_lists()
 
     def update_lists(self):
-        open_focus = self.open_todos.focus_position
-        closed_focus = self.closed_todos.focus_position
-        self.open_todos.body[:] = self.create_todo_list(self.todos["open"], True).body
-        self.closed_todos.body[:] = self.create_todo_list(self.todos["closed"], False).body
-        self.open_todos.focus_position = min(open_focus, len(self.open_todos.body) - 1)
-        self.closed_todos.focus_position = min(closed_focus, len(self.closed_todos.body) - 1)
+        open_todos = self.todos["open"]
+        closed_todos = self.todos["closed"]
+
+        self.open_todos.body[:] = self.create_todo_list(open_todos).body
+        self.closed_todos.body[:] = self.create_todo_list(closed_todos).body
+
+        # Adjust focus for open todos
+        if open_todos:
+            self.open_todos.focus_position = min(self.open_todos.focus_position if self.open_todos.focus else 0, len(open_todos) - 1)
+        
+        # Adjust focus for closed todos
+        if closed_todos:
+            self.closed_todos.focus_position = min(self.closed_todos.focus_position if self.closed_todos.focus else 0, len(closed_todos) - 1)
+
+        # Update current focus if necessary
+        if self.current_focus == "open" and not open_todos:
+            self.current_focus = "closed"
+            self.columns.focus_position = 1
+        elif self.current_focus == "closed" and not closed_todos:
+            self.current_focus = "open"
+            self.columns.focus_position = 0
 
     def unhandled_input(self, key):
         if key in ('q', 'Q'):
@@ -126,7 +151,10 @@ class TodoApp:
         old_list = self.open_todos if old_focus == "open" else self.closed_todos
         new_list = self.open_todos if new_focus == "open" else self.closed_todos
         
-        old_position = old_list.focus_position
+        if not self.todos[new_focus]:
+            return  # Don't swap if the new list is empty
+        
+        old_position = old_list.focus_position if self.todos[old_focus] else 0
         new_position = min(old_position, len(new_list.body) - 1)
         
         self.current_focus = new_focus
@@ -136,6 +164,8 @@ class TodoApp:
 
     def handle_movement(self, direction):
         current_list = self.open_todos if self.current_focus == "open" else self.closed_todos
+        if not current_list.body:
+            return  # Don't move if the list is empty
         if direction == 'up':
             current_list.focus_position = max(0, current_list.focus_position - 1)
         elif direction == 'down':
@@ -143,9 +173,12 @@ class TodoApp:
 
     def toggle_current_todo(self):
         current_list = self.open_todos if self.current_focus == "open" else self.closed_todos
+        if not current_list.body:
+            return  # Don't toggle if the list is empty
         focus = current_list.focus
         if focus:
-            todo = focus.base_widget.text.split(' ', 1)[1]
+            index = current_list.focus_position
+            todo = self.todos[self.current_focus][index]
             self.item_chosen(todo)
 
     def open_add_dialog(self):
@@ -174,7 +207,8 @@ class TodoApp:
 
     def add_todo(self, text):
         if text.strip():  # Only add non-empty todos
-            self.todos["open"].append(text.strip())
+            new_todo = Todo(text.strip())
+            self.todos["open"].append(new_todo)
             self.update_lists()
 
     def main(self):
@@ -188,8 +222,8 @@ class TodoApp:
 
         self.parse_todos()
 
-        self.open_todos = self.create_todo_list(self.todos["open"], True)
-        self.closed_todos = self.create_todo_list(self.todos["closed"], False)
+        self.open_todos = self.create_todo_list(self.todos["open"])
+        self.closed_todos = self.create_todo_list(self.todos["closed"])
 
         open_box = urwid.LineBox(self.open_todos, title="Open Todos")
         closed_box = urwid.LineBox(self.closed_todos, title="Closed Todos")
