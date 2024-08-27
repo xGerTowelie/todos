@@ -5,7 +5,7 @@ This is a terminal-based Todo Manager application written in Python, allowing yo
 ## Features
 
 - **Git Integration**: Ensures that the application runs only inside a Git repository.
-- **Automatic Todo Parsing**: Scans the `README.md` file for todo items listed under the "## Todo" section.
+- **Automatic Todo Parsing**: Scans the `README.md` file for todo items
 - **Todo Management**: 
   - View open and closed todos in a split view.
   - Add new todos.
@@ -67,7 +67,7 @@ pip install urwid
    The application starts by verifying that it is inside a Git repository. If it's not, the application will exit with an error.
 
 2. **README.md Check**:
-   The script checks for a `README.md` file in the root of the repository. If the file doesn't contain a "## Todo" section, it prompts the user to add one.
+   The script checks for a `README.md` file in the root of the repository. If the file doesn't contain a todo section, it prompts the user to add one.
 
 3. **Todo Parsing**:
    The application parses the `README.md` file, extracting todos that are formatted as markdown tasks (e.g., `- [ ] Task name` for open tasks, `- [x] Task name` for closed tasks).
@@ -93,3 +93,6 @@ Press `q` to save all changes and exit the application. The `README.md` file wil
 ## License
 
 This project is open-source. Feel free to use, modify, and distribute it as per your needs.
+
+## Todo
+- [ ] write on exit
