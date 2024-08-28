@@ -4,6 +4,7 @@ import urwid
 import re
 import subprocess
 import uuid
+import signal
 
 class Todo:
     def __init__(self, text, status="open"):
@@ -43,7 +44,7 @@ class TodoApp:
 
         with open(self.readme_path, "r") as f:
             content = f.read()
-            if "## Todo" not in content:
+            if not re.search(r'^\s*##\s*Todo\s*$', content, re.MULTILINE):
                 response = input("README.md exists but doesn't have a '## Todo' section. Add it? (y/n): ")
                 if response.lower() == 'y':
                     with open(self.readme_path, "a") as f:
@@ -56,33 +57,29 @@ class TodoApp:
     def parse_todos(self):
         with open(self.readme_path, "r") as f:
             content = f.read()
-            todos = re.findall(r'- \[([ x])\] (.+)', content)
-            for status, text in todos:
-                todo = Todo(text, "closed" if status == 'x' else "open")
-                self.todos[todo.status].append(todo)
+            todo_section = re.search(r'^\s*##\s*Todo\s*$(.*?)(?:^\s*#|$)', content, re.MULTILINE | re.DOTALL)
+            if todo_section:
+                todos = re.findall(r'- \[([ x])\] (.+)', todo_section.group(1))
+                for status, text in todos:
+                    todo = Todo(text, "closed" if status == 'x' else "open")
+                    self.todos[todo.status].append(todo)
 
     def save_todos(self):
         with open(self.readme_path, "r") as f:
-            content = f.readlines()
+            content = f.read()
 
-        todo_section = False
-        new_content = []
-        for line in content:
-            if line.strip() == "## Todo":
-                todo_section = True
-                new_content.append(line)
-                for todo in self.todos["open"]:
-                    new_content.append(f"- [ ] {todo.text}\n")
-                for todo in self.todos["closed"]:
-                    new_content.append(f"- [x] {todo.text}\n")
-            elif todo_section and line.strip().startswith("- ["):
-                continue
-            else:
-                new_content.append(line)
-                todo_section = False
+        todo_section_match = re.search(r'(^\s*##\s*Todo\s*$.*?)(?:^\s*#|$)', content, re.MULTILINE | re.DOTALL)
+        if todo_section_match:
+            todo_section = todo_section_match.group(1)
+            new_todo_section = "## Todo\n"
+            for todo in self.todos["open"]:
+                new_todo_section += f"- [ ] {todo.text}\n"
+            for todo in self.todos["closed"]:
+                new_todo_section += f"- [x] {todo.text}\n"
+            new_content = content.replace(todo_section, new_todo_section)
 
-        with open(self.readme_path, "w") as f:
-            f.writelines(new_content)
+            with open(self.readme_path, "w") as f:
+                f.write(new_content)
 
     def create_todo_list(self, todos):
         body = []
@@ -232,6 +229,14 @@ class TodoApp:
         self.frame = urwid.Frame(self.columns)
 
         self.loop = urwid.MainLoop(self.frame, self.palette, unhandled_input=self.unhandled_input)
+
+        # Handle Ctrl+C gracefully
+        def exit_on_ctrl_c(signum, frame):
+            self.save_todos()
+            raise urwid.ExitMainLoop()
+
+        signal.signal(signal.SIGINT, exit_on_ctrl_c)
+
         self.loop.run()
 
 if __name__ == "__main__":
