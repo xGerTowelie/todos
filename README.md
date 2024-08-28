@@ -93,6 +93,3 @@ Press `q` to save all changes and exit the application. The `README.md` file wil
 ## License
 
 This project is open-source. Feel free to use, modify, and distribute it as per your needs.
-
-## Todo
-- [ ] write on exit
