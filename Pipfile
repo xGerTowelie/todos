@@ -5,8 +5,12 @@ name = "pypi"
 
 [packages]
 urwid = "*"
+pyinstaller = "*"
 
 [dev-packages]
 
+[scripts]
+build = "pyinstaller --onefile todos.py"
+
 [requires]
-python_version = "3.12"
+python_version = "3.9"
