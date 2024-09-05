@@ -1,7 +1,17 @@
-#/!bin/bash
+#!/bin/bash
 
+# Create a virtual environment
 python3 -m venv venv
+
+# Activate the virtual environment
 source venv/bin/activate
+
+# Install dependencies
 pip install -r requirements.txt
-pyinstaller --onefile $script_name
+
+# Compile the Python project with PyInstaller
+pyinstaller --onefile todos.py
+
+# Deactivate the virtual environment
 deactivate
+
